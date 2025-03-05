@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import math
 
 class ByteNGramModel:
-    def __init__(self, n: int = 8, smoothing: float = 0.1):
+    def __init__(self, n: int = 8, smoothing: float = 0.0001):
         """
         n: Context length (number of previous bytes to consider)
         smoothing: Laplace smoothing parameter
@@ -53,6 +53,21 @@ class ByteNGramModel:
     def get_entropy(self, context: bytes) -> float:
         """Calculate Shannon entropy of next byte distribution given context."""
         probs = self.get_next_byte_distribution(context)
+        
+        # Print probability distribution
+        # if context == b'lo,':
+        #     # Print context and probabilities in a more readable format
+        #     print(f"\nContext: {context}")
+        #     print("Byte  ASCII  Hex    Probability")
+        #     print("-" * 35)
+        #     for byte, prob in enumerate(probs):
+        #         if prob > 0.001:  # Only show probabilities > 0.1%
+        #             try:
+        #                 ascii_char = chr(byte) if 32 <= byte <= 126 else '.'
+        #             except ValueError:
+        #                 ascii_char = '.'
+        #             print(f"{byte:3d}  '{ascii_char}'    0x{byte:02x}   {prob:.6f}")
+        
         # Only consider non-zero probabilities in entropy calculation
         nonzero_probs = probs[probs > 0]
         return -np.sum(nonzero_probs * np.log2(nonzero_probs))
@@ -78,15 +93,14 @@ class ByteNGramModel:
 
 if __name__ == "__main__":
     # Example usage
-    model = ByteNGramModel(n=8)
+    window = 3
+    model = ByteNGramModel(n=window)
     
     # Training data
-    texts = [
-        "Hello, this is some example text.",
-        "More text to train the model.",
-        "Even more training data here."
-    ]
-    
+    with open('William_Shakespeare.txt', 'r', encoding='utf-8') as f:
+        text = f.read()
+    texts = [text]  # Using the entire Shakespeare text as training data
+
     # Train the model
     model.train(texts)
     
@@ -100,5 +114,5 @@ if __name__ == "__main__":
     # Print results
     print("\nEntropy predictions:")
     for i, entropy in enumerate(entropies):
-        context = test_bytes[i:i+8].decode('utf-8', errors='replace')
-        print(f"Context: {context}, Entropy: {entropy:.4f}") 
+        context = test_bytes[i:i+window].decode('utf-8', errors='replace')
+        print(f"Context: {context}_ Entropy: {entropy:.4f}") 
