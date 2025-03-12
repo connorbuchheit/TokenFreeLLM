@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from byte_lm import ByteLevelLM, ByteDataset
+# from byte_lm import ByteLevelLM, ByteDataset # Do i need something in lieu of this ???
 
 def train_model(
-    model: ByteLevelLM,
+    model: LMTransformer,
     train_loader: DataLoader,
     val_loader: DataLoader,
     num_epochs: int = 10,
@@ -70,7 +70,7 @@ def train_model(
         print(f'Average validation loss: {avg_val_loss:.4f}')
 
 if __name__ == "__main__":
-    model = ByteLevelLM()
+    model = LMTransformer()
     
     # Create sample data (replace with your actual dataset)
     sample_texts = ["Your training text here", "More training text"]
