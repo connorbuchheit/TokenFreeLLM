@@ -103,7 +103,7 @@ if __name__ == "__main__":
     model = ByteNGramModel(n=window)
 
     # Training data from parquet file
-    parquet_file = 'a.parquet'  # Assuming 'a.parquet' is in the same directory
+    parquet_file = 'data/a.parquet'  # Assuming 'a.parquet' is in the same directory
     num_texts_to_process = 20000 # Define the number of texts to process
     print(f"Loading text data from '{parquet_file}' (processing first {num_texts_to_process} texts)...") # Progress update: Start reading parquet
     try:
