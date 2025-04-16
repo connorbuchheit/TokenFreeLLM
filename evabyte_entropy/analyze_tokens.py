@@ -65,12 +65,12 @@ def calculate_entropy_for_each_position(prompt):
     print(f"Processing {total_positions} bytes")
     
     for i in range(1, total_positions + 1):
-        start = max(0, i-20)
+        start = max(0, i-200)
         prefix = prompt[start:i]
         entropy = calculate_next_byte_entropy(prefix)
         entropies.append(entropy)
-        if i % 10 == 0:
-            print(f"Processed {i}/{total_positions} bytes")
+        # if i % 10 == 0:
+        #     print(f"Processed {i}/{total_positions} bytes")
     
     return entropies
 
@@ -174,14 +174,14 @@ if __name__ == "__main__":
 
 
     # Test static tokenization with entropy threshold
-    static_tokens = generate_patches("static", prompt, entropies, 1.0)
+    static_tokens = generate_patches("static", prompt, entropies, 0.6)
     print("\nEntropy tokens:")
     print(static_tokens)
     static_stats = get_token_stats(static_tokens)
     print(f"Total: {static_stats['total_tokens']}, Unique: {static_stats['unique_tokens']}, Avg length: {static_stats['avg_token_length']:.2f}")
 
     # Test derivative tokenization
-    derivative_tokens = generate_patches("derivative", prompt, entropies, 0.5)
+    derivative_tokens = generate_patches("derivative", prompt, entropies, 1.0)
     print("\nDerivative tokens:")
     print(derivative_tokens)
     derivative_stats = get_token_stats(derivative_tokens)
