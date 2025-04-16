@@ -1,0 +1,152 @@
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+import tiktoken
+
+# Set matplotlib to use a non-interactive backend if running in a headless environment
+matplotlib.use('Agg')
+
+# Load model and tokenizer
+tokenizer = AutoTokenizer.from_pretrained("evabyte/EvaByte", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("evabyte/EvaByte", torch_dtype=torch.bfloat16, trust_remote_code=True).eval().to("cuda")
+
+
+def calculate_next_byte_entropy(prompt):
+    """
+    Calculate entropy for the next byte prediction given an input prompt.
+    
+    Args:
+        prompt (str): Input text prompt
+        
+    Returns:
+        float: Entropy value in bits
+    """
+    # Tokenize input using standard HF tokenizer interface
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to("cuda")
+    
+    # Generate position_ids
+    position_ids = torch.arange(len(input_ids[0]), dtype=torch.long, device="cuda").unsqueeze(0)
+    
+    # Get logits for the next token
+    with torch.no_grad():
+        outputs = model(input_ids, position_ids=position_ids)
+        
+    # Model returns a tuple with logits as the first element
+    next_byte_logits = outputs[0][0, -1, :]  # shape: [vocab_size]
+    
+    # Convert to probabilities with softmax
+    next_byte_probs = torch.nn.functional.softmax(next_byte_logits, dim=0)
+    
+    # Calculate entropy - more efficient implementation
+    # For numerical stability, we use log_softmax and directly compute entropy
+    log_probs = torch.nn.functional.log_softmax(next_byte_logits, dim=0)
+    entropy = -torch.sum(next_byte_probs * log_probs) / torch.log(torch.tensor(2.0))  # Convert to bits
+    
+    return entropy.item()
+
+def calculate_entropy_for_each_position(prompt):
+    """
+    Calculate entropy for each position in the input string with batching for improved efficiency.
+    
+    Args:
+        prompt (str): Input text prompt
+        batch_size (int): Number of positions to process in each batch
+    
+    Returns:
+        list: List of entropy values for each position
+    """
+    entropies = []
+    total_positions = len(prompt)
+    
+    print(f"Processing {total_positions} bytes")
+    
+    for i in range(1, total_positions + 1):
+        start = max(0, i-100)
+        prefix = prompt[start:i]
+        entropy = calculate_next_byte_entropy(prefix)
+        entropies.append(entropy)
+        if i % 10 == 0:
+            print(f"Processed {i}/{total_positions} bytes")
+    
+    return entropies
+
+def generate_tokens(prompt):
+    tokens = []
+    enc = tiktoken.get_encoding("cl100k_base")  # You can change to another encoding if needed
+    token_ids = enc.encode(prompt)
+    for token_id in token_ids:
+        tokens.append(enc.decode([token_id]))
+    return tokens
+
+def patch_threshold(values, prompt, threshold):
+    """
+    Helper function to create tokens based on threshold values
+    
+    Args:
+        values (list): List of values to check against threshold
+        prompt (str): Input text prompt
+        threshold (float): Threshold value for splitting tokens
+        
+    Returns:
+        list: List of tokens
+    """
+    tokens = []
+    current_token = ""
+    
+    for i, value in enumerate(values):
+        if i < len(prompt):  # Ensure we don't go out of bounds
+            current_token += prompt[i]
+            if value > threshold:
+                tokens.append(current_token)
+                current_token = ""
+    
+    # Add the last token if not empty
+    if current_token:
+        tokens.append(current_token)
+        
+    return tokens
+
+def generate_patches(method, prompt, threshold=0.6):
+    entropies = calculate_entropy_for_each_position(prompt)
+    tokens = []
+
+    if method == "static":
+        return patch_threshold(entropies, prompt, threshold)
+
+    if method == "derivative":
+        derivatives = [entropies[i] - entropies[i-1] for i in range(1, len(entropies))]
+        return patch_threshold(derivatives, prompt[:-1], threshold)  # Adjust prompt length to match derivatives
+
+
+
+
+
+if __name__ == "__main__":
+    with open("sample_text.txt", "r") as f:
+        prompt = f.read().strip()
+    print(f"Loaded text")
+
+    entropies = calculate_entropy_for_each_position(prompt)
+    for i, entropy in enumerate(entropies):
+        print(f"{prompt[i]}: {entropy}")
+
+    # Test tiktoken tokenization
+    tiktoken_tokens = generate_tokens(prompt)
+    print("\nTiktoken tokens:")
+    print(tiktoken_tokens)  
+    
+    # Test static tokenization with entropy threshold
+    static_tokens = generate_patches("static", prompt, 1.0)
+    print("\nEntropy tokens:")
+    print(static_tokens)
+    
+    # Test derivative tokenization
+    derivative_tokens = generate_patches("derivative", prompt, 2.5)
+    print("\nDerivative tokens:")
+    print(derivative_tokens)
+
+
+
+    
