@@ -69,8 +69,8 @@ def calculate_entropy_for_each_position(prompt):
         prefix = prompt[start:i]
         entropy = calculate_next_byte_entropy(prefix)
         entropies.append(entropy)
-        # if i % 10 == 0:
-        #     print(f"Processed {i}/{total_positions} bytes")
+        if i % 10 == 0:
+            print(f"Processed {i}/{total_positions} bytes")
     
     return entropies
 
@@ -149,19 +149,45 @@ def get_token_stats(tokens):
         "avg_token_length": sum(len(t) for t in tokens) / len(tokens) if tokens else 0
     }
 
+def jaccard_similarity(tokens1, tokens2):
+    """
+    Calculate the Jaccard similarity between two lists of tokens.
+
+    Args:
+        tokens1 (list): First list of tokens.
+        tokens2 (list): Second list of tokens.
+
+    Returns:
+        float: Jaccard similarity score.
+    """
+    set1 = set(tokens1)
+    set2 = set(tokens2)
+
+    intersection = set1.intersection(set2)
+    union = set1.union(set2)
+
+    if not union:
+        return 1.0  # Both sets are empty, consider them identical
+
+    return len(intersection) / len(union)
+
 if __name__ == "__main__":
     with open("sample_text.txt", "r") as f:
         prompt = f.read().strip()
     print(f"Loaded text")
 
     entropies = calculate_entropy_for_each_position(prompt)
+    derivatives = [entropies[i] - entropies[i-1] for i in range(1, len(entropies))]
+    entropy_chars = prompt
+    derivative_chars = prompt[1:]
+
     # for i, entropy in enumerate(entropies):
     #     print(f"{prompt[i]}: {entropy}")
 
     # Test tiktoken tokenization
     tiktoken_tokens = generate_tokens(prompt, "tiktoken")
     print("\nTiktoken tokens:")
-    print(tiktoken_tokens)
+    # print(tiktoken_tokens)
     tiktoken_stats = get_token_stats(tiktoken_tokens)
     print(f"Total: {tiktoken_stats['total_tokens']}, Unique: {tiktoken_stats['unique_tokens']}, Avg length: {tiktoken_stats['avg_token_length']:.2f}")
     
@@ -173,20 +199,70 @@ if __name__ == "__main__":
     # print(f"Total: {sp_stats['total_tokens']}, Unique: {sp_stats['unique_tokens']}, Avg length: {sp_stats['avg_token_length']:.2f}")
 
 
-    # Test static tokenization with entropy threshold
-    static_tokens = generate_patches("static", prompt, entropies, 0.6)
-    print("\nEntropy tokens:")
-    print(static_tokens)
-    static_stats = get_token_stats(static_tokens)
-    print(f"Total: {static_stats['total_tokens']}, Unique: {static_stats['unique_tokens']}, Avg length: {static_stats['avg_token_length']:.2f}")
+    # Test static tokenization with entropy threshold - NOW LOOPING
+    # static_tokens = generate_patches("static", prompt, entropies, 0.6)
+    # print("\nEntropy tokens:")
+    # print(static_tokens)
+    # static_stats = get_token_stats(static_tokens)
+    # print(f"Total: {static_stats['total_tokens']}, Unique: {static_stats['unique_tokens']}, Avg length: {static_stats['avg_token_length']:.2f}")
 
-    # Test derivative tokenization
-    derivative_tokens = generate_patches("derivative", prompt, entropies, 1.0)
-    print("\nDerivative tokens:")
-    print(derivative_tokens)
+    # Keep derivative tokenization outside loop (using a fixed threshold for now)
+    derivative_threshold = 1.0 
+    derivative_tokens = generate_patches("derivative", prompt, entropies, derivative_threshold)
+    print(f"\nDerivative tokens (threshold={derivative_threshold}):")
     derivative_stats = get_token_stats(derivative_tokens)
     print(f"Total: {derivative_stats['total_tokens']}, Unique: {derivative_stats['unique_tokens']}, Avg length: {derivative_stats['avg_token_length']:.2f}")
 
+    # Loop through different static thresholds
+    static_thresholds = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] # Example thresholds
+    print("\n--- Testing Different Static Thresholds ---")
+    for threshold in static_thresholds:
+        static_tokens = generate_patches("static", prompt, entropies, threshold)
+        derivative_tokens = generate_patches("derivative", prompt, entropies, threshold)
+        static_stats = get_token_stats(static_tokens)
+        derivative_stats = get_token_stats(derivative_tokens)
+        print(f" Threshold: {threshold}")
+        print(f"Static:\n  Total: {static_stats['total_tokens']}, Unique: {static_stats['unique_tokens']}, Avg length: {static_stats['avg_token_length']:.2f}")
+        print()
+        print(f"Derivative:\n  Total: {derivative_stats['total_tokens']}, Unique: {derivative_stats['unique_tokens']}, Avg length: {derivative_stats['avg_token_length']:.2f}")
+
+        # Calculate and print Jaccard similarities for this threshold
+        jaccard_tiktoken_static = jaccard_similarity(tiktoken_tokens, static_tokens)
+        jaccard_tiktoken_derivative = jaccard_similarity(tiktoken_tokens, derivative_tokens)
+        print(f"  Jaccard (Tiktoken vs Static): {jaccard_tiktoken_static:.4f}")
+        print(f"  Jaccard (Static vs Derivative): {jaccard_tiktoken_derivative:.4f}")
 
 
+    # # Create figure with appropriate size
+    # plt.figure(figsize=(20, 8))
+    
+    # # Plot entropy values starting at prompt index 0
+    # plt.plot(list(range(len(entropies))), entropies, marker='.', markersize=10, linestyle='-', color='blue', label='Entropy')
+    
+    # # Plot derivatives starting at prompt index 1
+    # plt.plot(list(range(1, len(derivatives) + 1)), derivatives, marker='.', markersize=10, linestyle='-', color='red', label='Derivative')
+    
+    # # Add labels and title
+    # plt.ylabel('Value')
+    
+    # plt.title('Entropy and Derivatives of Input Text')
+    # plt.grid(True)
+    
+    # # Add legend
+    # plt.legend(loc='upper right')
+    
+    # # Set x-axis ticks to show characters (limit to reasonable number if text is long)
+    # max_chars_to_display = 50
+    # if len(prompt) <= max_chars_to_display:
+    #     plt.xticks(range(len(prompt)), list(prompt))
+    # else:
+    #     # Show a subset of characters if the text is too long
+    #     step = len(prompt) // max_chars_to_display
+    #     plt.xticks(range(0, len(prompt), step), [prompt[i] for i in range(0, len(prompt), step)])
+    
+    # # Save plot to file
+    # plt.tight_layout()
+    # plt.savefig('entropy_derivative_plot.png')
+    # print("Plot saved as 'entropy_derivative_plot.png'")
+    
     
